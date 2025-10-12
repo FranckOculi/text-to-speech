@@ -1,0 +1,128 @@
+package main
+
+import (
+	"encoding/binary"
+	"io"
+	"log"
+	"net/http"
+	"os/exec"
+	"sync"
+	"time"
+)
+
+var (
+	mu     sync.Mutex
+	cmd    *exec.Cmd
+	abort  chan struct{}
+)
+
+func main() {
+	abort = make(chan struct{})
+	log.Println("Server listening on port :8080")
+
+	http.HandleFunc("/tts", func(w http.ResponseWriter, r *http.Request) {
+		// Stop any ongoing speech
+		mu.Lock()
+		if cmd != nil {
+			log.Println("Stopping any ongoing speech")
+			cmd.Process.Kill()
+			cmd = nil
+			close(abort)
+			abort = make(chan struct{})
+		}
+		mu.Unlock()
+
+		text := r.URL.Query().Get("text")
+		if text == "" {
+			http.Error(w, "The 'text' parameter is required", http.StatusBadRequest)
+			return
+		}
+
+		log.Printf("New speech request received: '%s'", text)
+
+		// Estimate total size based on text length (500 bytes per character)
+		estimatedTotalSize := len(text) * 500
+		log.Printf("Estimated total size: %d bytes", estimatedTotalSize)
+
+		// Send estimated total size first (8 bytes, big-endian)
+		sizeBuf := make([]byte, 8)
+		binary.BigEndian.PutUint64(sizeBuf, uint64(estimatedTotalSize))
+		if _, err := w.Write(sizeBuf); err != nil {
+			log.Printf("Error sending total size: %v", err)
+			return
+		}
+
+		// Start the real command for streaming
+		cmd = exec.Command("espeak-ng", "-v", "fr", "--stdout", text)
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			log.Printf("Error creating stdout pipe: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		if err := cmd.Start(); err != nil {
+			log.Printf("Error starting espeak-ng: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		defer func() {
+			mu.Lock()
+			cmd = nil
+			mu.Unlock()
+		}()
+
+		w.Header().Set("Content-Type", "audio/wav")
+		w.Header().Set("Transfer-Encoding", "chunked")
+		log.Println("Streaming audio started")
+
+		buf := make([]byte, 1024)
+		totalBytes := 0
+		startTime := time.Now()
+		lastLogTime := startTime
+		lastLoggedBytes := 0
+
+		for {
+			select {
+			case <-abort:
+				log.Println("Speech interrupted by new request")
+				cmd.Process.Kill()
+				return
+			default:
+				n, err := stdout.Read(buf)
+				if err != nil {
+					if err != io.EOF {
+						log.Printf("Error reading audio stream: %v", err)
+					} else {
+						elapsed := time.Since(startTime)
+						log.Printf("Audio stream completed. Total bytes sent: %d in %v (%.1f KB/s)",
+							totalBytes, elapsed, float64(totalBytes)/elapsed.Seconds()/1024)
+					}
+					return
+				}
+
+				totalBytes += n
+				if _, err := w.Write(buf[:n]); err != nil {
+					log.Printf("Error sending audio data: %v", err)
+					return
+				}
+				if f, ok := w.(http.Flusher); ok {
+					f.Flush()
+				}
+
+				// Log progress every 100KB or every 1 second
+				if totalBytes-lastLoggedBytes >= 102400 || time.Since(lastLogTime) >= time.Second {
+					elapsed := time.Since(startTime)
+					speed := float64(totalBytes) / elapsed.Seconds()
+					progress := float64(totalBytes) / float64(estimatedTotalSize) * 100
+					log.Printf("Progress: %d/%d bytes (%.1f%%, %.1f KB/s)",
+						totalBytes, estimatedTotalSize, progress, speed/1024)
+					lastLoggedBytes = totalBytes
+					lastLogTime = time.Now()
+				}
+			}
+		}
+	})
+
+	log.Fatal(http.ListenAndServe(":8080", nil))
+}
