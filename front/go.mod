@@ -1,8 +1,11 @@
-module text-to-speech/front
+module front
 
 go 1.25.1
 
-require github.com/getlantern/systray v1.2.2
+require (
+	github.com/getlantern/systray v1.2.2
+	github.com/joho/godotenv v1.5.1
+)
 
 require (
 	github.com/getlantern/context v0.0.0-20190109183933-c447772a6520 // indirect
@@ -13,6 +16,6 @@ require (
 	github.com/getlantern/ops v0.0.0-20190325191751-d70cb0d6f85f // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c // indirect
-	github.com/stretchr/testify v1.9.0 // indirect
-	golang.org/x/sys v0.29.0 // indirect
+	github.com/stretchr/testify v1.11.1 // indirect
+	golang.org/x/sys v0.30.0 // indirect
 )
