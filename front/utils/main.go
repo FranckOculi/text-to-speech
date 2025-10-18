@@ -11,7 +11,9 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/joho/godotenv"
 )
@@ -21,6 +23,7 @@ type RequestBody struct {
 }
 
 var apiURL string
+var maxCharacters uint
 
 func LoadEnv() {
 	err := godotenv.Load()
@@ -31,6 +34,13 @@ func LoadEnv() {
 	apiURL = os.Getenv("API_URL")
 	if apiURL == "" {
 		log.Fatal("API_URL variable is not defined in .env file")
+	}
+
+	max := os.Getenv("MAX_CHARACTERS")
+	maxVal, err := strconv.ParseUint(max, 10, 32)
+	maxCharacters = uint(maxVal)
+	if err != nil || maxCharacters == 0 {
+		log.Fatal("MAX_CHARACTERS variable is not defined in .env file")
 	}
 }
 
@@ -61,6 +71,15 @@ func GetSelectedText() string {
 	}
 
 	return text
+}
+
+func VerifyText(text string) error {
+	count := utf8.RuneCountInString(text)
+	if count > int(maxCharacters) {
+		return fmt.Errorf("max characters exceeded : %v / %v", count, maxCharacters)
+	}
+
+	return nil
 }
 
 func GetSpeech(ctx context.Context, text string) ([]byte, error) {

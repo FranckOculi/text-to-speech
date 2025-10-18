@@ -97,7 +97,14 @@ func getTest(ctx context.Context) {
 	mStop.Show()
 	defer mStop.Hide()
 
-	requestBody := utils.RequestBody{Text: "coucou tout le monde"}
+	selectedText := utils.GetSelectedText()
+	err := utils.VerifyText(selectedText)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	requestBody := utils.RequestBody{Text: selectedText}
 	jsonData, err := json.Marshal(requestBody)
 	if err != nil {
 		fmt.Printf("Error JSON convert : %v\n", err)
@@ -164,6 +171,12 @@ func read(ctx context.Context) {
 		}
 
 		log.Printf("Selected text : %v \n", text)
+
+		err := utils.VerifyText(text)
+		if err != nil {
+			log.Println(err)
+			return
+		}
 
 		data, err := utils.GetSpeech(ctx, text)
 		if err != nil {
