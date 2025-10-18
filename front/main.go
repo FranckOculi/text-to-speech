@@ -1,8 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"sync"
@@ -46,6 +52,7 @@ func onReady() {
 				cancelFuncMu.Unlock()
 
 				go read(ctx)
+				// go getTest(ctx)
 			case <-mStop.ClickedCh:
 				log.Println("Stop menu clicked")
 				stopCurrentReading()
@@ -84,52 +91,109 @@ func onExit() {
 	time.Sleep(100 * time.Millisecond)
 }
 
+func getTest(ctx context.Context) {
+	log.Println("Start Test...")
+
+	mStop.Show()
+	defer mStop.Hide()
+
+	requestBody := utils.RequestBody{Text: "coucou tout le monde"}
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		fmt.Printf("Error JSON convert : %v\n", err)
+		return
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", "http://localhost:8080/test", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Println("Request error : ", err)
+		return
+	}
+
+	client := http.Client{}
+	res, err := client.Do(req)
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			log.Println("Reading cancelled")
+			return
+		}
+
+		log.Println("Request error : ", err)
+		return
+	}
+
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		log.Println(res.Status)
+		return
+	}
+
+	if res.StatusCode >= 400 {
+		log.Println("Error response : ", res.Status, res.Body)
+	}
+
+	text, err := io.ReadAll(res.Body)
+	if err != nil {
+		log.Println(err)
+	}
+
+	log.Println("Response : ", string(text))
+
+	cancelFuncMu.Lock()
+	cancelFunc = nil
+	cancelFuncMu.Unlock()
+
+	log.Println("Test finished")
+}
+
 func read(ctx context.Context) {
 	log.Println("Start reading...")
 
 	mStop.Show()
 	defer mStop.Hide()
 
-	if ctx.Err() != nil {
+	select {
+	case <-ctx.Done():
 		log.Println("Reading cancelled")
 		return
-	}
-
-	text := utils.GetSelectedText()
-	if text == "" {
-		return
-	}
-
-	log.Printf("Selected text : %v \n", text)
-
-	data, err := utils.GetSpeech(ctx, text)
-	if err != nil {
-		return
-	}
-
-	err = utils.SaveContent(data)
-	if err != nil {
-		return
-	}
-
-	cmd := exec.CommandContext(ctx, "aplay", "output.wav")
-	currentCmdMu.Lock()
-	currentCmd = cmd
-	currentCmdMu.Unlock()
-
-	if err := cmd.Run(); err != nil {
-		if ctx.Err() == context.Canceled {
-			log.Println("Playback canceled")
-		} else {
-			log.Printf("Playback error: %v", err)
+	default:
+		text := utils.GetSelectedText()
+		if text == "" {
+			return
 		}
+
+		log.Printf("Selected text : %v \n", text)
+
+		data, err := utils.GetSpeech(ctx, text)
+		if err != nil {
+			return
+		}
+
+		err = utils.SaveContent(data)
+		if err != nil {
+			return
+		}
+
+		cmd := exec.CommandContext(ctx, "aplay", "output.wav")
+		currentCmdMu.Lock()
+		currentCmd = cmd
+		currentCmdMu.Unlock()
+
+		if err := cmd.Run(); err != nil {
+			if ctx.Err() == context.Canceled {
+				log.Println("Playback canceled")
+			} else {
+				log.Printf("Playback error: %v", err)
+			}
+		}
+
+		cancelFuncMu.Lock()
+		cancelFunc = nil
+		cancelFuncMu.Unlock()
+
+		log.Println("Reading finished")
 	}
-
-	cancelFuncMu.Lock()
-	cancelFunc = nil
-	cancelFuncMu.Unlock()
-
-	log.Println("Reading finished")
 }
 
 func stopCurrentReading() {

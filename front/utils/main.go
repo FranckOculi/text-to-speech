@@ -2,18 +2,23 @@
 package utils
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/joho/godotenv"
 )
+
+type RequestBody struct {
+	Text string `json:"text"`
+}
 
 var apiURL string
 
@@ -59,7 +64,14 @@ func GetSelectedText() string {
 }
 
 func GetSpeech(ctx context.Context, text string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf(apiURL, url.QueryEscape(text)), nil)
+	requestBody := RequestBody{Text: text}
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		fmt.Printf("Error JSON convert : %v\n", err)
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		log.Printf("Error creating request: %v", err)
 		return nil, err

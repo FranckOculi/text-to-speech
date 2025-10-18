@@ -3,8 +3,10 @@ package utils
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -36,6 +38,18 @@ func LoadEnv() {
 	}
 }
 
+func InitLogger() {
+	logFile, err := os.OpenFile("app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("Error opening log file : %v\n", err)
+	}
+
+	mw := io.MultiWriter(os.Stdout, logFile)
+
+	log.SetOutput(mw)
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+}
+
 type SpeechClientHTTP struct {
 }
 
@@ -52,7 +66,7 @@ func GetSpeechClientHTTP() *SpeechClientHTTP {
 	return clientHTTP
 }
 
-func (c *SpeechClientHTTP) InitRequest(text string, w http.ResponseWriter) (*http.Request, error) {
+func (c *SpeechClientHTTP) InitRequest(ctx context.Context, text string, w http.ResponseWriter) (*http.Request, error) {
 	requestBody := map[string]any{
 		"input": map[string]string{
 			"text": text,
@@ -74,7 +88,7 @@ func (c *SpeechClientHTTP) InitRequest(text string, w http.ResponseWriter) (*htt
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(jsonData))
 	req.Header.Set("Authorization", apiKey)
 
 	if err != nil {
