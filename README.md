@@ -1,5 +1,5 @@
 ## Description
-A simple project to learn golang.
+A Go-based application that captures user-selected text anywhere on their computer and streams back the corresponding speech in real time.
 
 ##   Run project :
 
