@@ -1,12 +1,15 @@
+## Description
+A simple project to learn golang.
+
 ##   Run project :
 
 Add .env to each folder
 
-### FRONT
+#### FRONT
 `go get github.com/getlantern/systray`
 `go mod tidy`
 
-### BACK
+#### BACK
 `go mod tidy`
 
 

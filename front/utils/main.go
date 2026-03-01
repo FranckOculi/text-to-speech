@@ -108,7 +108,7 @@ func GetSpeech(ctx context.Context, text string) ([]byte, error) {
 	if res.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(res.Body)
 		log.Printf("Server error: %s (code %d)", string(body), res.StatusCode)
-		return nil, err
+		return nil, fmt.Errorf("Server error: %s (code %d)", string(body), res.StatusCode)
 	}
 
 	audioData, err := io.ReadAll(res.Body)
@@ -121,7 +121,8 @@ func GetSpeech(ctx context.Context, text string) ([]byte, error) {
 }
 
 func SaveContent(audioData []byte) error {
-	err := os.WriteFile("output.wav", audioData, 0644)
+	// err := os.WriteFile("output.wav", audioData, 0644)
+	err := os.WriteFile("output.mp3", audioData, 0644)
 	if err != nil {
 		log.Printf("Error writing file: %v", err)
 		return err

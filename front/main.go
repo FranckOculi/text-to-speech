@@ -51,6 +51,7 @@ func onReady() {
 				cancelFunc = cancel
 				cancelFuncMu.Unlock()
 
+				// go readMP3File(ctx)
 				go read(ctx)
 				// go getTest(ctx)
 			case <-mStop.ClickedCh:
@@ -90,6 +91,14 @@ func onExit() {
 	log.Println("Cleanup done")
 	time.Sleep(100 * time.Millisecond)
 }
+
+// func readMP3File(ctx context.Context) {
+// 	cmd := exec.Command("mpg123", "output.mp3")
+
+// 	if err := cmd.Run(); err != nil {
+// 		log.Printf("Playback error: %v", err)
+// 	}
+// }
 
 func getTest(ctx context.Context) {
 	log.Println("Start Test...")
@@ -188,7 +197,8 @@ func read(ctx context.Context) {
 			return
 		}
 
-		cmd := exec.CommandContext(ctx, "aplay", "output.wav")
+		cmd := exec.Command("mpg123", "output.mp3")
+		// cmd := exec.CommandContext(ctx, "aplay", "output.wav")
 		currentCmdMu.Lock()
 		currentCmd = cmd
 		currentCmdMu.Unlock()

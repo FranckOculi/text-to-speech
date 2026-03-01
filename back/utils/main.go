@@ -2,6 +2,7 @@
 package utils
 
 import (
+	"back/services/common"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -27,14 +28,14 @@ func LoadEnv() {
 		log.Fatalf("Error when loading .env file : %v", err)
 	}
 
-	apiKey = os.Getenv("GOOGLE_API_KEY")
+	apiKey = os.Getenv("ELEVEN_LAB_API_KEY")
 	if apiKey == "" {
-		log.Fatal("GOOGLE_API_KEY variable is not defined in .env file")
+		log.Fatal("ELEVEN_LAB_API_KEY variable is not defined in .env file")
 	}
 
-	apiURL = os.Getenv("GOOGLE_API_URL")
+	apiURL = os.Getenv("ELEVEN_LAB_URL")
 	if apiURL == "" {
-		log.Fatal("GOOGLE_API_URL variable is not defined in .env file")
+		log.Fatal("ELEVEN_LAB_URL variable is not defined in .env file")
 	}
 }
 
@@ -66,7 +67,7 @@ func GetSpeechClientHTTP() *SpeechClientHTTP {
 	return clientHTTP
 }
 
-func (c *SpeechClientHTTP) InitRequest(ctx context.Context, text string, w http.ResponseWriter) (*http.Request, error) {
+func (c *SpeechClientHTTP) InitGoogleRequest(ctx context.Context, text string, w http.ResponseWriter) (*http.Request, error) {
 	requestBody := map[string]any{
 		"input": map[string]string{
 			"text": text,
@@ -100,6 +101,43 @@ func (c *SpeechClientHTTP) InitRequest(ctx context.Context, text string, w http.
 	query := req.URL.Query()
 	query.Add("key", apiKey)
 	req.URL.RawQuery = query.Encode()
+
+	return req, err
+}
+
+func (c *SpeechClientHTTP) InitElevenLabRequest(ctx context.Context, text string, w http.ResponseWriter) (*http.Request, error) {
+	requestBody := common.RequestBody{
+		Text: text,
+	}
+
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		fmt.Printf("Error JSON convert : %v\n", err)
+		return nil, err
+	}
+
+	// voiceId := "21m00Tcm4TlvDq8ikWAM"
+	// voiceId := "CwhRBWXzGAHq8TQ4Fs17" // Roger (fr)
+	// voiceId := "9BWtsMINqrJLrRacOk9x" // Aria (fr quebec accent)
+	voiceId := "EXAVITQu4vr4xnSDxMaL" // Sarah (ok but with bad intonation)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("%v/%v", apiURL, voiceId), bytes.NewBuffer(jsonData))
+	req.Header.Set("voice_id", "21m00Tcm4TlvDq8ikWAM")
+	req.Header.Set("xi-api-key", apiKey)
+	req.Header.Set("language_code", "FR")
+	// req.Header.Set("output_format", apiKey)
+
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Request error: %v", err), http.StatusInternalServerError)
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	query := req.URL.Query()
+	query.Add("key", apiKey)
+	req.URL.RawQuery = query.Encode()
+
+	log.Println(req.URL)
 
 	return req, err
 }

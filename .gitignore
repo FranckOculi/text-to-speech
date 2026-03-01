@@ -2,3 +2,5 @@
 /.idea
 output.wav
 app.log
+output.*
+voices.json
